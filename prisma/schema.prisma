@@ -1,0 +1,117 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+  CITY_ENGINEER
+  FLEET_MANAGER
+}
+
+model User {
+  id            String         @id @default(cuid())
+  name          String?
+  email         String         @unique
+  emailVerified DateTime?
+  image         String?
+  passwordHash  String?
+  role          Role           @default(USER)
+  organization  String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  accounts      Account[]
+  sessions      Session[]
+  subscriptions Subscription[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Subscription {
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stripeSubId      String   @unique
+  status           String
+  planTier         String   // "Free", "Pro", "Enterprise"
+  currentPeriodEnd DateTime
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model Lead {
+  id           String   @id @default(cuid())
+  name         String
+  email        String
+  organization String?
+  roleTitle    String?
+  cityRegion   String?
+  message      String
+  status       String   @default("NEW")
+  createdAt    DateTime @default(now())
+}
+
+model IntersectionNode {
+  id            String   @id @default(cuid())
+  nodeName      String
+  latitude      Float
+  longitude     Float
+  congestionIdx Float    // 0.0 (clear) to 1.0 (gridlock)
+  signalMode    String   @default("AI_ADAPTIVE") // "AI_ADAPTIVE", "MANUAL", "TIMED"
+  currentPhase  String   @default("NORTH_SOUTH_GREEN")
+  vehiclesPerMin Int      @default(120)
+  updatedAt     DateTime @updatedAt
+}
+
+model FleetVehicle {
+  id            String   @id @default(cuid())
+  vehicleCode   String   @unique
+  type          String   // "BUS", "EMERGENCY", "MUNICIPAL_TRUCK"
+  routeNumber   String?
+  latitude      Float
+  longitude     Float
+  speedKmh      Float
+  batteryLevel  Int      @default(90)
+  status        String   @default("ON_SCHEDULE") // "ON_SCHEDULE", "DELAYED", "REROUTED"
+  updatedAt     DateTime @updatedAt
+}
+
+model IncidentAlert {
+  id          String   @id @default(cuid())
+  title       String
+  severity    String   // "CRITICAL", "WARNING", "INFO"
+  location    String
+  description String
+  resolved    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+}
