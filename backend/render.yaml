@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: event-checkin-backend
+    env: node
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: PORT
+        value: 5001
+      - key: DATABASE_URL
+        fromDatabase:
+          name: event-checkin-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: FRONTEND_URL
+        value: "*"
+
+databases:
+  - name: event-checkin-db
+    databaseName: checkin_db
+    user: checkin_user
+    plan: free
