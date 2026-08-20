@@ -6,7 +6,7 @@ import { API_URL } from '../../config';
 import QRCode from 'qrcode';
 import { useAuth } from '../../context/AuthContext';
 import { generateClientTotpToken, getTimeRemainingSeconds } from '../../utils/totpClient';
-import { Ticket, ShieldAlert, CheckCircle2, Clock, Calendar, MapPin, RefreshCw, KeyRound, Sparkles } from 'lucide-react';
+import { Ticket, ShieldAlert, CheckCircle2, Clock, Calendar, MapPin, RefreshCw, KeyRound, Sparkles, Plus, Trash2, Users } from 'lucide-react';
 
 interface Registration {
   id: string;
@@ -31,6 +31,10 @@ interface EventItem {
   location: string;
   capacity: number;
   checked_in_count: number;
+  is_group_event: boolean;
+  min_group_size: number | null;
+  max_group_size: number | null;
+  registration_deadline: string | null;
 }
 
 export default function AttendeeDashboard() {
@@ -46,6 +50,8 @@ export default function AttendeeDashboard() {
   const qrCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const [registeringId, setRegisteringId] = useState<string | null>(null);
+  const [groupRegEvent, setGroupRegEvent] = useState<EventItem | null>(null);
+  const [groupMembers, setGroupMembers] = useState<{name: string, email: string}[]>([]);
 
   useEffect(() => {
     if (!isLoading && (!user || user.role !== 'attendee')) {
@@ -129,8 +135,18 @@ export default function AttendeeDashboard() {
     });
   }, [totpToken, selectedReg]);
 
+  // Initiate Registration (Check if group or single)
+  const initiateRegistration = (evt: EventItem) => {
+    if (evt.is_group_event) {
+      setGroupRegEvent(evt);
+      setGroupMembers([{ name: user?.name || '', email: user?.email || '' }]);
+    } else {
+      handleRegister(evt.id, null);
+    }
+  };
+
   // Register for event handler
-  const handleRegister = async (eventId: string) => {
+  const handleRegister = async (eventId: string, members: {name: string, email: string}[] | null) => {
     setRegisteringId(eventId);
     try {
       const res = await fetch(`${API_URL}/events/register`, {
@@ -139,11 +155,15 @@ export default function AttendeeDashboard() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ eventId })
+        body: JSON.stringify({ eventId, groupMembers: members })
       });
 
       if (res.ok) {
+        setGroupRegEvent(null);
         await fetchData();
+      } else {
+        const errorData = await res.json();
+        alert(errorData.error || 'Registration failed');
       }
     } catch (e) {
       console.error('Registration error:', e);
@@ -233,17 +253,35 @@ export default function AttendeeDashboard() {
                 return (
                   <div key={evt.id} className="p-4 rounded-2xl bg-gray-900/40 border border-gray-800 flex items-center justify-between gap-3">
                     <div>
-                      <h4 className="font-bold text-sm text-white">{evt.title}</h4>
-                      <p className="text-xs text-gray-400">{evt.location} • Cap: {evt.capacity}</p>
+                      <h4 className="font-bold text-sm text-white flex items-center gap-2">
+                        {evt.title}
+                        {evt.is_group_event && (
+                          <span className="text-[10px] bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded-full border border-purple-500/30 flex items-center gap-1">
+                            <Users className="w-3 h-3" /> Group
+                          </span>
+                        )}
+                      </h4>
+                      <p className="text-xs text-gray-400">
+                        {evt.location} • Cap: {evt.capacity}
+                        {evt.registration_deadline && (
+                          <> • <span className={new Date(evt.registration_deadline) < new Date() ? "text-red-400 font-semibold" : "text-amber-400"}>
+                            Closes: {new Date(evt.registration_deadline).toLocaleDateString()}
+                          </span></>
+                        )}
+                      </p>
                     </div>
 
                     {isAlreadyRegistered ? (
                       <span className="text-xs text-emerald-400 font-semibold px-3 py-1 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
                         Registered
                       </span>
+                    ) : (evt.registration_deadline && new Date(evt.registration_deadline) < new Date()) ? (
+                      <span className="text-xs text-red-400 font-semibold px-3 py-1 bg-red-500/10 rounded-xl border border-red-500/20">
+                        Closed
+                      </span>
                     ) : (
                       <button
-                        onClick={() => handleRegister(evt.id)}
+                        onClick={() => initiateRegistration(evt)}
                         disabled={registeringId === evt.id}
                         className="gradient-btn px-3.5 py-1.5 rounded-xl text-xs font-bold text-white shadow-md disabled:opacity-50"
                       >
@@ -322,6 +360,102 @@ export default function AttendeeDashboard() {
           )}
         </div>
       </div>
+
+      {/* Group Registration Modal */}
+      {groupRegEvent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <div className="glass-card rounded-2xl max-w-lg w-full p-6 border border-gray-700 shadow-2xl relative space-y-4 max-h-[90vh] flex flex-col">
+            <div>
+              <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                <Users className="w-5 h-5 text-purple-400" />
+                Group Registration
+              </h3>
+              <p className="text-xs text-gray-400 mt-1">
+                {groupRegEvent.title} allows group registrations. 
+                {groupRegEvent.min_group_size ? ` Min: ${groupRegEvent.min_group_size}` : ''}
+                {groupRegEvent.max_group_size ? ` Max: ${groupRegEvent.max_group_size}` : ''}
+              </p>
+            </div>
+
+            <div className="flex-1 overflow-y-auto space-y-3 pr-2">
+              {groupMembers.map((member, idx) => (
+                <div key={idx} className="flex gap-2 items-center bg-gray-900/50 p-3 rounded-xl border border-gray-800">
+                  <div className="font-bold text-gray-500 text-xs w-4">{idx + 1}.</div>
+                  <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <input
+                      type="text"
+                      placeholder="Name"
+                      required
+                      value={member.name}
+                      onChange={(e) => {
+                        const newM = [...groupMembers];
+                        newM[idx].name = e.target.value;
+                        setGroupMembers(newM);
+                      }}
+                      className="w-full glass-input px-3 py-1.5 rounded-lg text-xs"
+                    />
+                    <input
+                      type="email"
+                      placeholder="Email"
+                      required
+                      value={member.email}
+                      onChange={(e) => {
+                        const newM = [...groupMembers];
+                        newM[idx].email = e.target.value;
+                        setGroupMembers(newM);
+                      }}
+                      className="w-full glass-input px-3 py-1.5 rounded-lg text-xs"
+                    />
+                  </div>
+                  {idx > 0 && (
+                    <button
+                      onClick={() => setGroupMembers(groupMembers.filter((_, i) => i !== idx))}
+                      className="p-1.5 rounded-lg hover:bg-red-500/20 text-red-400 transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  if (groupRegEvent.max_group_size && groupMembers.length >= groupRegEvent.max_group_size) {
+                    alert(`Maximum group size of ${groupRegEvent.max_group_size} reached.`);
+                    return;
+                  }
+                  setGroupMembers([...groupMembers, { name: '', email: '' }]);
+                }}
+                className="w-full py-2 rounded-xl bg-gray-800 border border-gray-700 text-xs font-semibold text-gray-300 hover:bg-gray-700 flex items-center justify-center gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                Add Member
+              </button>
+            </div>
+
+            <div className="flex gap-2 pt-2 border-t border-gray-800">
+              <button
+                type="button"
+                onClick={() => setGroupRegEvent(null)}
+                className="flex-1 py-2.5 rounded-xl bg-gray-900 border border-gray-800 text-xs font-semibold text-gray-400 hover:text-gray-300"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => handleRegister(groupRegEvent.id, groupMembers)}
+                disabled={registeringId === groupRegEvent.id}
+                className="flex-1 gradient-btn py-2.5 rounded-xl text-xs font-bold text-white shadow-lg disabled:opacity-50"
+              >
+                {registeringId === groupRegEvent.id ? 'Registering...' : 'Register Group'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

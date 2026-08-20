@@ -17,7 +17,7 @@ function generateToken(user) {
 
 function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1] : null;
+  const token = (authHeader && authHeader.startsWith('Bearer ')) ? authHeader.split(' ')[1] : (req.query.token || null);
 
   if (!token) {
     return res.status(401).json({ error: 'Authentication required. Token missing.' });

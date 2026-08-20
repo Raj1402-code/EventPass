@@ -21,6 +21,7 @@ interface EventData {
   location: string;
   capacity: number;
   checked_in_count: number;
+  registration_deadline: string | null;
 }
 
 interface Attendee {
@@ -53,7 +54,20 @@ export default function OrganizerDashboard() {
   const [newDate, setNewDate] = useState('');
   const [newLocation, setNewLocation] = useState('');
   const [newCapacity, setNewCapacity] = useState(100);
+  const [isGroupEvent, setIsGroupEvent] = useState(false);
+  const [minGroupSize, setMinGroupSize] = useState('');
+  const [maxGroupSize, setMaxGroupSize] = useState('');
+  const [newRegDeadline, setNewRegDeadline] = useState('');
   const [createLoading, setCreateLoading] = useState(false);
+
+  // Edit Event State
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDesc, setEditDesc] = useState('');
+  const [editDate, setEditDate] = useState('');
+  const [editLocation, setEditLocation] = useState('');
+  const [editCapacity, setEditCapacity] = useState(100);
+  const [editRegDeadline, setEditRegDeadline] = useState('');
 
   const [syncingOffline, setSyncingOffline] = useState(false);
   const [socket, setSocket] = useState<Socket | null>(null);
@@ -155,7 +169,11 @@ export default function OrganizerDashboard() {
           description: newDesc,
           date: newDate,
           location: newLocation,
-          capacity: newCapacity
+          capacity: newCapacity,
+          isGroupEvent,
+          minGroupSize: minGroupSize ? parseInt(minGroupSize, 10) : null,
+          maxGroupSize: maxGroupSize ? parseInt(maxGroupSize, 10) : null,
+          registrationDeadline: newRegDeadline ? new Date(newRegDeadline).toISOString() : null
         })
       });
 
@@ -167,6 +185,10 @@ export default function OrganizerDashboard() {
         setNewDate('');
         setNewLocation('');
         setNewCapacity(100);
+        setIsGroupEvent(false);
+        setMinGroupSize('');
+        setMaxGroupSize('');
+        setNewRegDeadline('');
         await fetchEvents();
         if (data.event) {
           setSelectedEventId(data.event.id);
@@ -174,6 +196,62 @@ export default function OrganizerDashboard() {
       }
     } catch (e) {
       console.error('Create event error:', e);
+    } finally {
+      setCreateLoading(false);
+    }
+  };
+
+  // Open Edit Modal
+  const openEditModal = () => {
+    if (!activeEvent) return;
+    setEditTitle(activeEvent.title);
+    setEditDesc(activeEvent.description || '');
+    const dateObj = new Date(activeEvent.date);
+    setEditDate(new Date(dateObj.getTime() - (dateObj.getTimezoneOffset() * 60000)).toISOString().slice(0, 16));
+    setEditLocation(activeEvent.location);
+    setEditCapacity(activeEvent.capacity);
+    if (activeEvent.registration_deadline) {
+      const rdObj = new Date(activeEvent.registration_deadline);
+      setEditRegDeadline(new Date(rdObj.getTime() - (rdObj.getTimezoneOffset() * 60000)).toISOString().slice(0, 16));
+    } else {
+      setEditRegDeadline('');
+    }
+    setIsEditModalOpen(true);
+  };
+
+  // Handle Edit Event
+  const handleEditEvent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeEvent || !editTitle || !editDate || !editLocation || !editCapacity) return;
+    
+    setCreateLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/events/${activeEvent.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          title: editTitle,
+          description: editDesc,
+          date: new Date(editDate).toISOString(),
+          location: editLocation,
+          capacity: editCapacity,
+          registrationDeadline: editRegDeadline ? new Date(editRegDeadline).toISOString() : null
+        })
+      });
+
+      if (res.ok) {
+        setIsEditModalOpen(false);
+        await fetchEvents();
+        fetchEventDetails(activeEvent.id);
+      } else {
+        const errorData = await res.json();
+        alert(errorData.error || 'Update failed');
+      }
+    } catch (e) {
+      console.error('Update event error:', e);
     } finally {
       setCreateLoading(false);
     }
@@ -367,6 +445,13 @@ export default function OrganizerDashboard() {
               {/* Action Buttons: Scanner & Export CSV */}
               <div className="flex items-center gap-3 flex-wrap">
                 <button
+                  onClick={openEditModal}
+                  className="px-4 py-2.5 rounded-xl text-xs font-bold bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-700 flex items-center gap-2 transition-all"
+                >
+                  <span>Edit Event</span>
+                </button>
+
+                <button
                   onClick={() => setIsScannerOpen(true)}
                   className="gradient-btn px-4 py-2.5 rounded-xl text-xs font-bold text-white flex items-center gap-2 shadow-lg shadow-indigo-500/20"
                 >
@@ -559,6 +644,56 @@ export default function OrganizerDashboard() {
                 />
               </div>
 
+              <div>
+                <label className="block text-xs font-semibold text-gray-300 mb-1">Registration Deadline (Optional)</label>
+                <input
+                  type="datetime-local"
+                  value={newRegDeadline}
+                  onChange={(e) => setNewRegDeadline(e.target.value)}
+                  className="w-full glass-input px-3.5 py-2 rounded-xl text-xs text-white"
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="isGroupEvent"
+                  checked={isGroupEvent}
+                  onChange={(e) => setIsGroupEvent(e.target.checked)}
+                  className="w-4 h-4 text-purple-600 bg-gray-900 border-gray-700 rounded focus:ring-purple-500 cursor-pointer"
+                />
+                <label htmlFor="isGroupEvent" className="text-xs font-semibold text-gray-300 cursor-pointer">
+                  This is a Group Registration Event
+                </label>
+              </div>
+
+              {isGroupEvent && (
+                <div className="grid grid-cols-2 gap-2 bg-gray-900/50 p-3 rounded-xl border border-gray-800">
+                  <div>
+                    <label className="block text-[10px] font-semibold text-gray-400 mb-1 uppercase tracking-wider">Min Group Size</label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={minGroupSize}
+                      onChange={(e) => setMinGroupSize(e.target.value)}
+                      placeholder="Optional"
+                      className="w-full glass-input px-3 py-1.5 rounded-lg text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-semibold text-gray-400 mb-1 uppercase tracking-wider">Max Group Size</label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={maxGroupSize}
+                      onChange={(e) => setMaxGroupSize(e.target.value)}
+                      placeholder="Optional"
+                      className="w-full glass-input px-3 py-1.5 rounded-lg text-xs"
+                    />
+                  </div>
+                </div>
+              )}
+
               <div className="flex gap-2 pt-4">
                 <button
                   type="button"
@@ -573,6 +708,99 @@ export default function OrganizerDashboard() {
                   className="flex-1 gradient-btn py-2.5 rounded-xl text-xs font-bold text-white shadow-lg disabled:opacity-50"
                 >
                   {createLoading ? 'Creating...' : 'Create Event'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Event Modal */}
+      {isEditModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <div className="glass-card rounded-2xl max-w-md w-full p-6 border border-gray-700 shadow-2xl relative space-y-4">
+            <h3 className="text-xl font-bold text-white">Edit Event</h3>
+            <form onSubmit={handleEditEvent} className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-gray-300 mb-1">Event Title</label>
+                <input
+                  type="text"
+                  required
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  className="w-full glass-input px-3.5 py-2 rounded-xl text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-300 mb-1">Description</label>
+                <textarea
+                  value={editDesc}
+                  onChange={(e) => setEditDesc(e.target.value)}
+                  className="w-full glass-input px-3.5 py-2 rounded-xl text-xs h-20 resize-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-300 mb-1">Date & Time</label>
+                  <input
+                    type="datetime-local"
+                    required
+                    value={editDate}
+                    onChange={(e) => setEditDate(e.target.value)}
+                    className="w-full glass-input px-3.5 py-2 rounded-xl text-xs text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-300 mb-1">Capacity Limit</label>
+                  <input
+                    type="number"
+                    required
+                    min={1}
+                    value={editCapacity}
+                    onChange={(e) => setEditCapacity(parseInt(e.target.value, 10))}
+                    className="w-full glass-input px-3.5 py-2 rounded-xl text-xs"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-300 mb-1">Location</label>
+                <input
+                  type="text"
+                  required
+                  value={editLocation}
+                  onChange={(e) => setEditLocation(e.target.value)}
+                  className="w-full glass-input px-3.5 py-2 rounded-xl text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-300 mb-1">Registration Deadline (Optional)</label>
+                <input
+                  type="datetime-local"
+                  value={editRegDeadline}
+                  onChange={(e) => setEditRegDeadline(e.target.value)}
+                  className="w-full glass-input px-3.5 py-2 rounded-xl text-xs text-white"
+                />
+              </div>
+
+              <div className="flex gap-2 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setIsEditModalOpen(false)}
+                  className="flex-1 py-2.5 rounded-xl bg-gray-800 text-xs font-semibold text-gray-300 hover:bg-gray-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={createLoading}
+                  className="flex-1 gradient-btn py-2.5 rounded-xl text-xs font-bold text-white shadow-lg disabled:opacity-50"
+                >
+                  {createLoading ? 'Saving...' : 'Save Changes'}
                 </button>
               </div>
             </form>

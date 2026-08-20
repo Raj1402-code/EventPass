@@ -55,7 +55,12 @@ const MIGRATION_STATEMENTS = [
       email VARCHAR(255) PRIMARY KEY,
       otp VARCHAR(10) NOT NULL,
       expires_at TIMESTAMPTZ NOT NULL
-  )`
+  )`,
+  `ALTER TABLE events ADD COLUMN IF NOT EXISTS is_group_event BOOLEAN DEFAULT FALSE`,
+  `ALTER TABLE events ADD COLUMN IF NOT EXISTS min_group_size INT`,
+  `ALTER TABLE events ADD COLUMN IF NOT EXISTS max_group_size INT`,
+  `ALTER TABLE events ADD COLUMN IF NOT EXISTS registration_deadline TIMESTAMPTZ`,
+  `ALTER TABLE attendees DROP CONSTRAINT IF EXISTS attendees_event_id_user_id_key`
 ];
 
 async function initDB() {

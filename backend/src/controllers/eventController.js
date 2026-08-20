@@ -8,7 +8,7 @@ function generateId(prefix) {
 // Create new event (Organizer only)
 async function createEvent(req, res) {
   try {
-    const { title, description, date, location, capacity } = req.body;
+    const { title, description, date, location, capacity, isGroupEvent, minGroupSize, maxGroupSize, registrationDeadline } = req.body;
 
     if (!title || !date || !location || !capacity) {
       return res.status(400).json({ error: 'Title, date, location, and capacity are required.' });
@@ -19,12 +19,17 @@ async function createEvent(req, res) {
       return res.status(400).json({ error: 'Capacity must be a positive integer.' });
     }
 
+    const isGroup = Boolean(isGroupEvent);
+    const minSize = isGroup && minGroupSize ? parseInt(minGroupSize, 10) : null;
+    const maxSize = isGroup && maxGroupSize ? parseInt(maxGroupSize, 10) : null;
+    const regDeadline = registrationDeadline ? new Date(registrationDeadline).toISOString() : null;
+
     const eventId = generateId('evt');
 
     await db.query(
-      `INSERT INTO events (id, title, description, date, location, capacity, checked_in_count, organizer_id)
-       VALUES ($1, $2, $3, $4, $5, $6, 0, $7)`,
-      [eventId, title.trim(), description || '', new Date(date).toISOString(), location.trim(), parsedCapacity, req.user.id]
+      `INSERT INTO events (id, title, description, date, location, capacity, checked_in_count, organizer_id, is_group_event, min_group_size, max_group_size, registration_deadline)
+       VALUES ($1, $2, $3, $4, $5, $6, 0, $7, $8, $9, $10, $11)`,
+      [eventId, title.trim(), description || '', new Date(date).toISOString(), location.trim(), parsedCapacity, req.user.id, isGroup, minSize, maxSize, regDeadline]
     );
 
     const newEvent = await db.query('SELECT * FROM events WHERE id = $1', [eventId]);
@@ -32,6 +37,48 @@ async function createEvent(req, res) {
   } catch (err) {
     console.error('Create Event error:', err);
     return res.status(500).json({ error: 'Internal server error while creating event.' });
+  }
+}
+
+// Update existing event (Organizer only)
+async function updateEvent(req, res) {
+  try {
+    const { id } = req.params;
+    const { title, description, date, location, capacity, registrationDeadline } = req.body;
+
+    const eventRes = await db.query('SELECT * FROM events WHERE id = $1', [id]);
+    if (eventRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Event not found.' });
+    }
+
+    const event = eventRes.rows[0];
+    if (event.organizer_id !== req.user.id) {
+      return res.status(403).json({ error: 'You do not have permission to edit this event.' });
+    }
+
+    if (!title || !date || !location || !capacity) {
+      return res.status(400).json({ error: 'Title, date, location, and capacity are required.' });
+    }
+
+    const parsedCapacity = parseInt(capacity, 10);
+    if (isNaN(parsedCapacity) || parsedCapacity <= 0) {
+      return res.status(400).json({ error: 'Capacity must be a positive integer.' });
+    }
+
+    const regDeadline = registrationDeadline ? new Date(registrationDeadline).toISOString() : null;
+
+    await db.query(
+      `UPDATE events 
+       SET title = $1, description = $2, date = $3, location = $4, capacity = $5, registration_deadline = $6
+       WHERE id = $7`,
+      [title.trim(), description || '', new Date(date).toISOString(), location.trim(), parsedCapacity, regDeadline, id]
+    );
+
+    const updatedEvent = await db.query('SELECT * FROM events WHERE id = $1', [id]);
+    return res.json({ message: 'Event updated successfully.', event: updatedEvent.rows[0] });
+  } catch (err) {
+    console.error('Update Event error:', err);
+    return res.status(500).json({ error: 'Internal server error while updating event.' });
   }
 }
 
@@ -84,7 +131,7 @@ async function getEventById(req, res) {
 // Register Attendee for an Event
 async function registerForEvent(req, res) {
   try {
-    const { eventId } = req.body;
+    const { eventId, groupMembers } = req.body; // groupMembers: [{name, email}]
 
     if (!eventId) {
       return res.status(400).json({ error: 'eventId is required.' });
@@ -97,35 +144,62 @@ async function registerForEvent(req, res) {
 
     const event = eventRes.rows[0];
 
-    // Check existing registration
-    const existing = await db.query('SELECT * FROM attendees WHERE event_id = $1 AND user_id = $2', [eventId, req.user.id]);
-    if (existing.rows.length > 0) {
-      return res.json({
-        message: 'Already registered for this event.',
-        attendee: existing.rows[0]
-      });
+    // Check registration deadline
+    if (event.registration_deadline && new Date() > new Date(event.registration_deadline)) {
+      return res.status(403).json({ error: 'Registration deadline has passed.' });
+    }
+
+    // Determine attendees to register
+    let attendeesToRegister = [];
+    if (event.is_group_event && groupMembers && Array.isArray(groupMembers) && groupMembers.length > 0) {
+      const size = groupMembers.length;
+      if (event.min_group_size && size < event.min_group_size) {
+        return res.status(400).json({ error: `Group size must be at least ${event.min_group_size}.` });
+      }
+      if (event.max_group_size && size > event.max_group_size) {
+        return res.status(400).json({ error: `Group size cannot exceed ${event.max_group_size}.` });
+      }
+      attendeesToRegister = groupMembers;
+    } else {
+      attendeesToRegister = [{ name: req.user.name, email: req.user.email }];
     }
 
     // Check event capacity
     const regCountRes = await db.query('SELECT COUNT(*) as count FROM attendees WHERE event_id = $1', [eventId]);
     const currentTotalRegs = parseInt(regCountRes.rows[0].count, 10);
-    if (currentTotalRegs >= event.capacity) {
+    if (currentTotalRegs + attendeesToRegister.length > event.capacity) {
       return res.status(400).json({ error: 'Event registration capacity reached.' });
     }
 
-    const attendeeId = generateId('att');
-    const totpSecret = generateTotpSecret();
+    // Check existing registration
+    const existing = await db.query('SELECT * FROM attendees WHERE event_id = $1 AND user_id = $2', [eventId, req.user.id]);
+    if (existing.rows.length > 0) {
+      return res.json({
+        message: 'Already registered for this event.',
+        attendees: existing.rows
+      });
+    }
 
-    await db.query(
-      `INSERT INTO attendees (id, event_id, user_id, attendee_name, attendee_email, totp_secret, status)
-       VALUES ($1, $2, $3, $4, $5, $6, 'registered')`,
-      [attendeeId, eventId, req.user.id, req.user.name, req.user.email, totpSecret]
-    );
+    // Use a transaction to register all attendees
+    const newAttendees = await db.transaction(async (txQuery) => {
+      const inserted = [];
+      for (const member of attendeesToRegister) {
+        const attendeeId = generateId('att');
+        const totpSecret = generateTotpSecret();
+        
+        await txQuery(
+          `INSERT INTO attendees (id, event_id, user_id, attendee_name, attendee_email, totp_secret, status)
+           VALUES ($1, $2, $3, $4, $5, $6, 'registered')`,
+          [attendeeId, eventId, req.user.id, member.name, member.email, totpSecret]
+        );
+        inserted.push({ id: attendeeId, name: member.name, email: member.email, status: 'registered' });
+      }
+      return inserted;
+    });
 
-    const newAttendee = await db.query('SELECT * FROM attendees WHERE id = $1', [attendeeId]);
     return res.status(201).json({
       message: 'Successfully registered for event.',
-      attendee: newAttendee.rows[0]
+      attendees: newAttendees
     });
   } catch (err) {
     console.error('Register for Event error:', err);
@@ -187,6 +261,7 @@ async function exportCSV(req, res) {
 
 module.exports = {
   createEvent,
+  updateEvent,
   getEvents,
   getEventById,
   registerForEvent,

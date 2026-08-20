@@ -3,6 +3,7 @@ const http = require('http');
 const cors = require('cors');
 const { Server } = require('socket.io');
 require('dotenv').config();
+const path = require('path');
 
 const { initDB } = require('./config/db');
 const { authenticateToken, requireRole } = require('./middleware/auth');
@@ -55,6 +56,7 @@ app.get('/api/auth/me', authenticateToken, authController.getMe);
 
 // Event Routes
 app.post('/api/events', authenticateToken, requireRole('organizer'), eventController.createEvent);
+app.put('/api/events/:id', authenticateToken, requireRole('organizer'), eventController.updateEvent);
 app.get('/api/events', authenticateToken, eventController.getEvents);
 app.get('/api/events/my/registrations', authenticateToken, eventController.getMyRegistrations);
 app.get('/api/events/:id', authenticateToken, eventController.getEventById);
@@ -70,6 +72,12 @@ app.post('/api/events/ai-query', authenticateToken, requireRole('organizer'), ai
 
 // Health check endpoint
 app.get('/api/health', (req, res) => res.json({ status: 'OK', timestamp: new Date() }));
+
+// Serve Frontend Static Files
+app.use(express.static(path.join(__dirname, '../../frontend/dist')));
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../../frontend/dist/index.html'));
+});
 
 const PORT = process.env.PORT || 5001;
 
