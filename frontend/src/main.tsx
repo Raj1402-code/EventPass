@@ -6,6 +6,7 @@ import { Navbar } from './components/Navbar';
 import AuthPage from './app/page';
 import OrganizerDashboard from './app/dashboard/page';
 import AttendeeDashboard from './app/attendee/page';
+import ProfilePage from './app/profile/page';
 
 function AppRouter() {
   const { user } = useAuth();
@@ -40,7 +41,9 @@ function AppRouter() {
     <div className="min-h-screen bg-[#0b0f19] text-gray-100 font-sans">
       <Navbar />
       <main className="min-h-[calc(100vh-4rem)]">
-        {currentPath === '/dashboard' ? (
+        {currentPath === '/profile' ? (
+          <ProfilePage />
+        ) : currentPath === '/dashboard' ? (
           <OrganizerDashboard />
         ) : currentPath === '/attendee' ? (
           <AttendeeDashboard />

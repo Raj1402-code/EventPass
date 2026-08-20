@@ -84,7 +84,14 @@ export function Navbar() {
           )}
 
           {/* User Role Pill */}
-          <div className="flex items-center gap-2 bg-gray-800/80 px-3.5 py-1.5 rounded-full border border-gray-700">
+          <button 
+            onClick={() => {
+              window.history.pushState({}, '', '/profile');
+              window.dispatchEvent(new PopStateEvent('popstate'));
+            }}
+            title="Go to Profile"
+            className="flex items-center gap-2 bg-gray-800/80 px-3.5 py-1.5 rounded-full border border-gray-700 hover:bg-gray-700/80 transition-colors"
+          >
             {user.role === 'organizer' ? (
               <LayoutDashboard className="w-4 h-4 text-purple-400" />
             ) : (
@@ -98,7 +105,19 @@ export function Navbar() {
             }`}>
               {user.role}
             </span>
-          </div>
+          </button>
+
+          {/* Home/Dashboard Button */}
+          <button
+            onClick={() => {
+              window.history.pushState({}, '', user.role === 'organizer' ? '/dashboard' : '/attendee');
+              window.dispatchEvent(new PopStateEvent('popstate'));
+            }}
+            className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
+            title="Home"
+          >
+            <LayoutDashboard className="w-5 h-5" />
+          </button>
 
           {/* Logout Button */}
           <button

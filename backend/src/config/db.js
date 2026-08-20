@@ -49,7 +49,13 @@ const MIGRATION_STATEMENTS = [
       is_offline_sync BOOLEAN DEFAULT FALSE
   )`,
   `CREATE INDEX IF NOT EXISTS idx_attendees_event_status ON attendees(event_id, status)`,
-  `CREATE INDEX IF NOT EXISTS idx_checkin_logs_event_time ON check_in_logs(event_id, scanned_at)`
+  `CREATE INDEX IF NOT EXISTS idx_checkin_logs_event_time ON check_in_logs(event_id, scanned_at)`,
+  `ALTER TABLE users ADD COLUMN IF NOT EXISTS reg_no VARCHAR(50)`,
+  `CREATE TABLE IF NOT EXISTS otp_codes (
+      email VARCHAR(255) PRIMARY KEY,
+      otp VARCHAR(10) NOT NULL,
+      expires_at TIMESTAMPTZ NOT NULL
+  )`
 ];
 
 async function initDB() {

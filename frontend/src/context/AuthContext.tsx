@@ -5,6 +5,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 export interface User {
   id: string;
   name: string;
+  reg_no?: string;
   email: string;
   role: 'organizer' | 'attendee';
 }

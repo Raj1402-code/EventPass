@@ -14,8 +14,12 @@ export default function AuthPage() {
   const [role, setRole] = useState<'organizer' | 'attendee'>('organizer');
 
   const [name, setName] = useState('');
+  const [regNo, setRegNo] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  
+  const [otp, setOtp] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -30,14 +34,49 @@ export default function AuthPage() {
     }
   }, [user, router]);
 
+  const handleSendOtp = async () => {
+    setError(null);
+
+    const emailLower = email.toLowerCase().trim();
+    if (!emailLower.endsWith('@vit.edu.in') && !emailLower.endsWith('@vitstudent.ac.in')) {
+      setError('Only VIT emails (@vit.edu.in or @vitstudent.ac.in) are allowed.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await fetch(`${SOCKET_URL}/api/auth/send-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: emailLower })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to send OTP.');
+      }
+      setOtpSent(true);
+    } catch (err: any) {
+      setError(err.message || 'Server error.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (isRegister && !otpSent) {
+      await handleSendOtp();
+      return;
+    }
+
     setError(null);
     setLoading(true);
 
     const endpoint = isRegister ? '/api/auth/register' : '/api/auth/login';
     const payload = isRegister
-      ? { name, email, password, role }
+      ? { name, reg_no: regNo, email, password, role, otp }
       : { email, password };
 
     try {
@@ -88,7 +127,7 @@ export default function AuthPage() {
         <div className="flex bg-gray-900/80 p-1 rounded-2xl mb-6 border border-gray-800">
           <button
             type="button"
-            onClick={() => { setIsRegister(false); setError(null); }}
+            onClick={() => { setIsRegister(false); setError(null); setOtpSent(false); }}
             className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${
               !isRegister ? 'bg-indigo-600 text-white shadow-lg' : 'text-gray-400 hover:text-white'
             }`}
@@ -97,7 +136,7 @@ export default function AuthPage() {
           </button>
           <button
             type="button"
-            onClick={() => { setIsRegister(true); setError(null); }}
+            onClick={() => { setIsRegister(true); setError(null); setOtpSent(false); }}
             className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${
               isRegister ? 'bg-indigo-600 text-white shadow-lg' : 'text-gray-400 hover:text-white'
             }`}
@@ -142,52 +181,99 @@ export default function AuthPage() {
 
         {/* Form Inputs */}
         <form onSubmit={handleSubmit} className="space-y-4">
-          {isRegister && (
-            <div>
-              <label className="block text-xs font-medium text-gray-300 mb-1">Full Name</label>
-              <div className="relative">
-                <User className="w-4 h-4 absolute left-3.5 top-3 text-gray-500" />
-                <input
-                  type="text"
-                  required
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="John Doe"
-                  className="w-full glass-input pl-10 pr-4 py-2.5 rounded-xl text-sm"
-                />
+          {!otpSent && isRegister && (
+            <>
+              <div>
+                <label className="block text-xs font-medium text-gray-300 mb-1">Full Name</label>
+                <div className="relative">
+                  <User className="w-4 h-4 absolute left-3.5 top-3 text-gray-500" />
+                  <input
+                    type="text"
+                    required
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="John Doe"
+                    className="w-full glass-input pl-10 pr-4 py-2.5 rounded-xl text-sm"
+                  />
+                </div>
               </div>
-            </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-300 mb-1">Registration Number</label>
+                <div className="relative">
+                  <UserCheck className="w-4 h-4 absolute left-3.5 top-3 text-gray-500" />
+                  <input
+                    type="text"
+                    required
+                    value={regNo}
+                    onChange={(e) => setRegNo(e.target.value.toUpperCase())}
+                    placeholder="21BCE0000"
+                    className="w-full glass-input pl-10 pr-4 py-2.5 rounded-xl text-sm uppercase"
+                  />
+                </div>
+              </div>
+            </>
           )}
 
-          <div>
-            <label className="block text-xs font-medium text-gray-300 mb-1">Email Address</label>
-            <div className="relative">
-              <Mail className="w-4 h-4 absolute left-3.5 top-3 text-gray-500" />
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                className="w-full glass-input pl-10 pr-4 py-2.5 rounded-xl text-sm"
-              />
-            </div>
-          </div>
+          {!otpSent && (
+            <>
+              <div>
+                <label className="block text-xs font-medium text-gray-300 mb-1">Email Address</label>
+                <div className="relative">
+                  <Mail className="w-4 h-4 absolute left-3.5 top-3 text-gray-500" />
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="you@vitstudent.ac.in"
+                    className="w-full glass-input pl-10 pr-4 py-2.5 rounded-xl text-sm"
+                  />
+                </div>
+              </div>
 
-          <div>
-            <label className="block text-xs font-medium text-gray-300 mb-1">Password</label>
-            <div className="relative">
-              <Lock className="w-4 h-4 absolute left-3.5 top-3 text-gray-500" />
+              <div>
+                <label className="block text-xs font-medium text-gray-300 mb-1">Password</label>
+                <div className="relative">
+                  <Lock className="w-4 h-4 absolute left-3.5 top-3 text-gray-500" />
+                  <input
+                    type="password"
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full glass-input pl-10 pr-4 py-2.5 rounded-xl text-sm"
+                  />
+                </div>
+              </div>
+            </>
+          )}
+
+          {isRegister && otpSent && (
+            <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="p-4 rounded-xl bg-indigo-500/10 border border-indigo-500/20 mb-4 text-center">
+                <p className="text-sm font-semibold text-indigo-300 mb-1">Check your email!</p>
+                <p className="text-xs text-gray-400">We sent a 6-digit verification code to <span className="text-gray-200">{email}</span></p>
+              </div>
+              <label className="block text-xs font-medium text-gray-300 mb-1">Verification Code (OTP)</label>
               <input
-                type="password"
+                type="text"
                 required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full glass-input pl-10 pr-4 py-2.5 rounded-xl text-sm"
+                value={otp}
+                onChange={(e) => setOtp(e.target.value)}
+                placeholder="123456"
+                className="w-full glass-input px-4 py-3 rounded-xl text-center tracking-widest text-lg font-bold"
+                maxLength={6}
               />
+              <button
+                type="button"
+                onClick={() => setOtpSent(false)}
+                className="w-full mt-2 text-xs text-gray-400 hover:text-white transition-colors"
+              >
+                Change email or resend code
+              </button>
             </div>
-          </div>
+          )}
 
           {error && (
             <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs font-medium">
@@ -204,7 +290,13 @@ export default function AuthPage() {
               <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
             ) : (
               <>
-                <span>{isRegister ? 'Create Account & Continue' : 'Sign In'}</span>
+                <span>
+                  {!isRegister 
+                    ? 'Sign In' 
+                    : otpSent 
+                      ? 'Verify & Create Account' 
+                      : 'Send Verification Code'}
+                </span>
                 <ArrowRight className="w-4 h-4" />
               </>
             )}

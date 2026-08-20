@@ -50,6 +50,7 @@ io.on('connection', (socket) => {
 // Auth Routes
 app.post('/api/auth/register', authController.register);
 app.post('/api/auth/login', authController.login);
+app.post('/api/auth/send-otp', authController.sendOtp);
 app.get('/api/auth/me', authenticateToken, authController.getMe);
 
 // Event Routes

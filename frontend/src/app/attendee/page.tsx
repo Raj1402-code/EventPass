@@ -92,34 +92,13 @@ export default function AttendeeDashboard() {
   useEffect(() => {
     if (!selectedReg) return;
 
-    const updateTotp = () => {
+    const updateTotp = async () => {
       const now = Date.now();
-      const tokenStr = generateClientTotpToken(selectedReg.totp_secret, now);
+      const tokenStr = await generateClientTotpToken(selectedReg.totp_secret, now);
       const secondsLeft = getTimeRemainingSeconds(now);
       
       setTotpToken(tokenStr);
       setTimeRemaining(secondsLeft);
-
-      // Generate QR Code Payload
-      if (qrCanvasRef.current) {
-        const qrPayload = JSON.stringify({
-          attendeeId: selectedReg.id,
-          eventId: selectedReg.event_id,
-          token: tokenStr,
-          timestamp: Math.floor(now / 1000)
-        });
-
-        QRCode.toCanvas(qrCanvasRef.current, qrPayload, {
-          width: 260,
-          margin: 2,
-          color: {
-            dark: '#1e1b4b',
-            light: '#ffffff'
-          }
-        }, (err) => {
-          if (err) console.error('QR code generation error:', err);
-        });
-      }
     };
 
     updateTotp();
@@ -127,6 +106,28 @@ export default function AttendeeDashboard() {
 
     return () => clearInterval(interval);
   }, [selectedReg]);
+
+  // Redraw QR code only when TOTP token changes
+  useEffect(() => {
+    if (!selectedReg || !totpToken || !qrCanvasRef.current) return;
+
+    const qrPayload = JSON.stringify({
+      attendeeId: selectedReg.id,
+      eventId: selectedReg.event_id,
+      token: totpToken
+    });
+
+    QRCode.toCanvas(qrCanvasRef.current, qrPayload, {
+      width: 260,
+      margin: 2,
+      color: {
+        dark: '#1e1b4b',
+        light: '#ffffff'
+      }
+    }, (err) => {
+      if (err) console.error('QR code generation error:', err);
+    });
+  }, [totpToken, selectedReg]);
 
   // Register for event handler
   const handleRegister = async (eventId: string) => {

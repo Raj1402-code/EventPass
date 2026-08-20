@@ -101,7 +101,7 @@ export default function OrganizerDashboard() {
   const fetchEventDetails = async (id: string) => {
     if (!token || !id) return;
     try {
-      const res = await fetch(`http://localhost:5001/api/events/${id}`, {
+      const res = await fetch(`${API_URL}/events/${id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
