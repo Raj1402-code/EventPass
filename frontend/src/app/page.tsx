@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from '../utils/useRouter';
 import { useAuth } from '../context/AuthContext';
-import { SOCKET_URL } from '../config';
+import { API_URL } from '../config';
 import { ShieldCheck, UserCheck, LayoutDashboard, Ticket, ArrowRight, Lock, Mail, User } from 'lucide-react';
 
 export default function AuthPage() {
@@ -45,7 +45,7 @@ export default function AuthPage() {
 
     setLoading(true);
     try {
-      const res = await fetch(`${SOCKET_URL}/api/auth/send-otp`, {
+      const res = await fetch(`${API_URL}/auth/send-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: emailLower })
@@ -74,13 +74,13 @@ export default function AuthPage() {
     setError(null);
     setLoading(true);
 
-    const endpoint = isRegister ? '/api/auth/register' : '/api/auth/login';
+    const endpoint = isRegister ? '/auth/register' : '/auth/login';
     const payload = isRegister
       ? { name, reg_no: regNo, email, password, role, otp }
       : { email, password };
 
     try {
-      const res = await fetch(`${SOCKET_URL}${endpoint}`, {
+      const res = await fetch(`${API_URL}${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
