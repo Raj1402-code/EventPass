@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { authenticateToken, requireRole } from '@/lib/auth';
 
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { user, error } = authenticateToken(req);
     if (error) return error;
@@ -10,7 +10,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     const roleCheck = requireRole(user, 'organizer');
     if (roleCheck.error) return roleCheck.error;
 
-    const { id } = params;
+    const id = (await params).id;
 
     const eventRes = await query('SELECT * FROM events WHERE id = $1', [id]);
     if (eventRes.rows.length === 0) {

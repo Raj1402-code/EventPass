@@ -3,9 +3,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 import { X, Camera, WifiOff, CheckCircle2, AlertCircle, RefreshCw, KeyRound } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
-import { saveOfflineScan } from '../utils/indexedDB';
-import { API_URL } from '../config';
+import { useAuth } from '@/components/AuthContext';
+import { saveOfflineScan } from '@/lib/indexedDB';
+const API_URL = "/api";
 
 interface QRScannerModalProps {
   eventId: string;

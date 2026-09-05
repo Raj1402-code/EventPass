@@ -10,7 +10,7 @@ import {
   Users, CheckCircle2, Clock, Download, Camera, Plus, Search, 
   RefreshCw, Sparkles, Calendar, MapPin, AlertCircle, ShieldAlert
 } from 'lucide-react';
-import { getPendingOfflineScans, clearOfflineScan } from '../../utils/indexedDB';
+import { getPendingOfflineScans, clearOfflineScan } from '@/lib/indexedDB';
 const API_URL = "/api";
 
 interface EventData {

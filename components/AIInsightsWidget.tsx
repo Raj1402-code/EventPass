@@ -2,8 +2,8 @@
 
 import React, { useState } from 'react';
 import { Sparkles, Send, Bot, AlertCircle, CheckCircle2 } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
-import { API_URL } from '../config';
+import { useAuth } from '@/components/AuthContext';
+const API_URL = "/api";
 
 interface AIInsightsWidgetProps {
   eventId: string;
