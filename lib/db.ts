@@ -64,6 +64,7 @@ export async function initDB() {
   pool = new Pool({
     connectionString: dbUrl,
     connectionTimeoutMillis: 5000,
+    ssl: dbUrl.includes('localhost') ? false : { rejectUnauthorized: false }
   });
 
   for (const sql of MIGRATION_STATEMENTS) {
