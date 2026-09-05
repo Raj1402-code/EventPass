@@ -1,62 +1,48 @@
-import { NextAuthOptions } from "next-auth";
-import CredentialsProvider from "next-auth/providers/credentials";
+import jwt from 'jsonwebtoken';
+import { NextRequest, NextResponse } from 'next/server';
 
-export const authOptions: NextAuthOptions = {
-  session: {
-    strategy: "jwt",
-    maxAge: 30 * 24 * 60 * 60, // 30 days
-  },
-  providers: [
-    CredentialsProvider({
-      name: "Enterprise Credentials",
-      credentials: {
-        email: { label: "Work Email", type: "email", placeholder: "engineer@city.gov" },
-        password: { label: "Password", type: "password" },
-      },
-      async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) {
-          throw new Error("Please enter email and password.");
-        }
+const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-event-checkin-jwt-key-2026';
 
-        // Production credential check / mock fallback for demo environment
-        const demoEmail = "demo@nexus-urban.ai";
-        const isDemo = credentials.email.toLowerCase() === demoEmail;
-
-        if (isDemo || credentials.password.length >= 6) {
-          return {
-            id: "user_demo_101",
-            email: credentials.email.toLowerCase(),
-            name: credentials.email.split("@")[0].toUpperCase() + " (Municipal Engineer)",
-            role: "CITY_ENGINEER",
-            organization: "City of Metro Nexus",
-          };
-        }
-
-        throw new Error("Invalid email or password.");
-      },
-    }),
-  ],
-  callbacks: {
-    async jwt({ token, user }) {
-      if (user) {
-        token.id = user.id;
-        token.role = (user as any).role || "CITY_ENGINEER";
-        token.organization = (user as any).organization || "Metro Traffic Dept";
-      }
-      return token;
+export function generateToken(user: any) {
+  return jwt.sign(
+    {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role
     },
-    async session({ session, token }) {
-      if (session.user) {
-        (session.user as any).id = token.id;
-        (session.user as any).role = token.role;
-        (session.user as any).organization = token.organization;
-      }
-      return session;
-    },
-  },
-  pages: {
-    signIn: "/auth/signin",
-    error: "/auth/signin",
-  },
-  secret: process.env.NEXTAUTH_SECRET || "nexus_super_secret_jwt_key_2026_change_in_production",
-};
+    JWT_SECRET,
+    { expiresIn: '7d' }
+  );
+}
+
+export function authenticateToken(req: NextRequest) {
+  const authHeader = req.headers.get('authorization');
+  let token = (authHeader && authHeader.startsWith('Bearer ')) ? authHeader.split(' ')[1] : null;
+  
+  if (!token) {
+    const url = new URL(req.url);
+    token = url.searchParams.get('token');
+  }
+
+  if (!token) {
+    return { error: NextResponse.json({ error: 'Authentication required. Token missing.' }, { status: 401 }) };
+  }
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    return { user: decoded as any };
+  } catch (err) {
+    return { error: NextResponse.json({ error: 'Invalid or expired token.' }, { status: 403 }) };
+  }
+}
+
+export function requireRole(user: any, ...roles: string[]) {
+  if (!user) {
+    return { error: NextResponse.json({ error: 'Authentication required.' }, { status: 401 }) };
+  }
+  if (!roles.includes(user.role)) {
+    return { error: NextResponse.json({ error: `Access denied. Required role: ${roles.join(' or ')}` }, { status: 403 }) };
+  }
+  return { success: true };
+}
